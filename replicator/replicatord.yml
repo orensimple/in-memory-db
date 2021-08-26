@@ -1,0 +1,36 @@
+mysql:
+  host: mysql_master
+  port: 3306
+  user: mydb_slave_user
+  password: mydb_slave_pwd
+  connect_retry: 15 # seconds
+
+tarantool:
+  host: tarantool:3301
+  binlog_pos_space: 512
+  binlog_pos_key: 0
+  connect_retry: 15 # seconds
+  sync_retry: 1000 # milliseconds
+
+mappings:
+  # Первая встреченная в конфиге таблица считается основной для спейса,
+  # удаление записи в ней вызовет удаление записи и в Tarantool'е.
+  # Удаление в следующих таблицах с таким-же id спейса удаления записи в Tarantool'е не вызовет,
+  # вместо этого все поля будут забиты null'ами (с подстановкой, см. ниже)
+  - database: ru.apolyakov.social_network
+    table: users
+    columns: [ id, login, password, first_name, last_name, sex, age, interests, city ]
+    space: users
+    key_fields: [ 0 ]
+
+spaces:
+  # Tarantool не умеет вставлять null'ы в поля, по которым есть индекс, а также при upsert'е зачем-то
+  # сначала валидирует ВСЕ аргументы, а только потом делает либо вставку, либо апдейт.
+  # Это проблема, если делать вставку из нескольких таблиц в один спейс, т.к. набор для вставки
+  # приходится дополнять null'ами, чтобы количество полей было всегда одинаковым.
+  #
+  # column_id: { (string|integer|unsigned): value }
+  users:
+    replace_null:
+      1: { string: "" }
+      2: { string: "" }
